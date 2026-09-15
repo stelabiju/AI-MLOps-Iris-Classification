@@ -65,4 +65,39 @@ jobs:
         echo "Unit tests passed."
         echo "API smoke tests passed."
         echo "Deployment pipeline completed successfully."
+        
+    - name: Step 6 - Build Docker Image
+      run: |
+        docker build -t iris-mlops-api:latest .
+
+    - name: Step 7 - Run Docker Container
+      run: |
+        docker run -d \
+          --name iris-mlops-container \
+          -p 8000:8000 \
+          iris-mlops-api:latest
+
+    - name: Step 8 - Test Docker Container
+      run: |
+        sleep 3
+
+        echo "Testing container health..."
+        curl -f http://127.0.0.1:8000/health
+
+        echo "Testing container prediction..."
+        curl -f -X POST \
+          http://127.0.0.1:8000/predict \
+          -H "Content-Type: application/json" \
+          -d '{"features":[5.1,3.5,1.4,0.2]}'
+
+    - name: Step 9 - Docker Logs
+      if: always()
+      run: |
+        docker logs iris-mlops-container || true
+
+    - name: Step 10 - Deployment Complete
+      run: |
+        echo "Docker image built successfully."
+        echo "Docker container tested successfully."
+        echo "MLOps pipeline completed successfully."
 
