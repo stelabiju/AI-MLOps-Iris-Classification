@@ -1,8 +1,10 @@
+```yaml
 name: Automated MLOps Pipeline
 
 on:
   push:
     branches: [ main ]
+
   schedule:
     - cron: '0 0 * * 0'
 
@@ -11,42 +13,69 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+    # --------------------------------------------------
+    # STEP 1 - CHECKOUT
+    # --------------------------------------------------
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    # --------------------------------------------------
+    # STEP 2 - PYTHON SETUP
+    # --------------------------------------------------
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
+    # --------------------------------------------------
+    # STEP 3 - INSTALL DEPENDENCIES
+    # --------------------------------------------------
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    # --------------------------------------------------
+    # STEP 4 - DATA DRIFT CHECK
+    # --------------------------------------------------
     - name: Step 1 - Check Data Drift
       id: drift-check
       run: |
         python drift_monitor.py
 
+    # --------------------------------------------------
+    # STEP 5 - CONDITIONAL RETRAINING
+    # --------------------------------------------------
     - name: Step 2 - Retrain Model (Conditional)
       if: steps.drift-check.outputs.drift_detected == 'true'
       run: |
         echo "Data drift detected! Triggering automated retraining..."
         python retrain.py
 
+    # --------------------------------------------------
+    # STEP 6 - MODEL VALIDATION
+    # --------------------------------------------------
     - name: Step 3 - Validate Model
       run: |
         python validate_model.py
 
+    # --------------------------------------------------
+    # STEP 7 - UNIT TESTS
+    # --------------------------------------------------
     - name: Step 4 - Run Unit Tests
       run: |
         pytest
 
+    # --------------------------------------------------
+    # STEP 8 - FASTAPI TEST
+    # --------------------------------------------------
     - name: Step 5 - Run Smoke & Integration Tests
       run: |
         echo "Starting FastAPI server for testing..."
+
         uvicorn app:app --host 127.0.0.1 --port 8000 &
+
         sleep 3
 
         echo "Running API health check..."
@@ -59,17 +88,16 @@ jobs:
           -H "Content-Type: application/json" \
           -d '{"features":[5.1,3.5,1.4,0.2]}'
 
-    - name: Step 6 - Automated Deployment
-      run: |
-        echo "Model validation passed."
-        echo "Unit tests passed."
-        echo "API smoke tests passed."
-        echo "Deployment pipeline completed successfully."
-
+    # --------------------------------------------------
+    # STEP 9 - DOCKER BUILD
+    # --------------------------------------------------
     - name: Step 6 - Build Docker Image
       run: |
         docker build -t iris-mlops-api:latest .
 
+    # --------------------------------------------------
+    # STEP 10 - RUN DOCKER CONTAINER
+    # --------------------------------------------------
     - name: Step 7 - Run Docker Container
       run: |
         docker run -d \
@@ -77,6 +105,9 @@ jobs:
           -p 8001:8000 \
           iris-mlops-api:latest
 
+    # --------------------------------------------------
+    # STEP 11 - TEST DOCKER CONTAINER
+    # --------------------------------------------------
     - name: Step 8 - Test Docker Container
       run: |
         sleep 3
@@ -90,14 +121,67 @@ jobs:
           -H "Content-Type: application/json" \
           -d '{"features":[5.1,3.5,1.4,0.2]}'
 
+    # --------------------------------------------------
+    # STEP 12 - DOCKER LOGS
+    # --------------------------------------------------
     - name: Step 9 - Docker Logs
       if: always()
       run: |
         docker logs iris-mlops-container || true
 
-    - name: Step 10 - Deployment Complete
-      run: |
-        echo "Docker image built successfully."
-        echo "Docker container tested successfully."
-        echo "MLOps pipeline completed successfully."
+    # --------------------------------------------------
+    # STEP 13 - DOCKER HUB LOGIN
+    # --------------------------------------------------
+    - name: Step 10 - Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    # --------------------------------------------------
+    # STEP 14 - PUSH DOCKER IMAGE
+    # --------------------------------------------------
+    - name: Step 11 - Push Docker Image
+      run: |
+        docker tag iris-mlops-api:latest stelabiju/iris-mlops-api:${{ github.sha }}
+
+        docker push stelabiju/iris-mlops-api:${{ github.sha }}
+
+    # --------------------------------------------------
+    # STEP 15 - UPDATE KUBERNETES MANIFEST
+    # --------------------------------------------------
+    - name: Step 12 - Update Kubernetes Manifest
+      run: |
+        sed -i "s|image: stelabiju/iris-mlops-api:.*|image: stelabiju/iris-mlops-api:${{ github.sha }}|" k8s/deployment.yml
+
+        echo "Updated Kubernetes deployment:"
+        cat k8s/deployment.yml
+
+    # --------------------------------------------------
+    # STEP 16 - COMMIT KUBERNETES MANIFEST
+    # --------------------------------------------------
+    - name: Step 13 - Commit Kubernetes Manifest
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        git add k8s/deployment.yml
+
+        git commit -m "Update Kubernetes image to ${{ github.sha }}" || echo "No changes to commit"
+
+        git push
+
+    # --------------------------------------------------
+    # STEP 17 - COMPLETE
+    # --------------------------------------------------
+    - name: Step 14 - Deployment Complete
+      run: |
+        echo "========================================"
+        echo "MLOps Pipeline Completed Successfully"
+        echo "========================================"
+        echo "Docker image built."
+        echo "Docker container tested."
+        echo "Docker image pushed to Docker Hub."
+        echo "Kubernetes deployment manifest updated."
+        echo "Kubernetes manifest pushed to GitHub."
+        echo "========================================"
