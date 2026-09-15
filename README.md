@@ -687,3 +687,9 @@ This project demonstrates practical implementation of:
 B.Tech Computer Science
 
 GitHub: [stelabiju](https://github.com/stelabiju)
+---
+
+## 📄 License
+
+This project is intended as an MLOps learning and demonstration project.
+
