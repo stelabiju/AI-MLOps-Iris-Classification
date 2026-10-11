@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
         - name: iris-mlops-api
-          image: stelabiju/iris-mlops-api:5ada77a09c4fb48de0d57f81240b97764b58ecfd
+          image: stelabiju/iris-mlops-api:22e0df01c0afe7bd2c5ec7c81187e82acfaeb85c
           ports:
             - containerPort: 8000
